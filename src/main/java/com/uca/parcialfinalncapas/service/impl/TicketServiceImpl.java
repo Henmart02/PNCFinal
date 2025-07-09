@@ -17,6 +17,8 @@ import com.uca.parcialfinalncapas.utils.mappers.TicketMapper;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 
@@ -77,7 +79,7 @@ public class TicketServiceImpl implements TicketService {
 
         ticketRepository.delete(ticketExistente);
     }
-
+/*
     @Override
     public TicketResponse getTicketById(Long id) {
     var ticketExistente = ticketRepository.findById(id)
@@ -90,7 +92,31 @@ public class TicketServiceImpl implements TicketService {
             .orElseThrow(() -> new UserNotFoundException("Usuario asignado no encontrado"));
 
         return TicketMapper.toDTO(ticketExistente, usuarioSolicitante.getCorreo(), usuarioSoporte.getCorreo());
+    }*/
+@Override
+public TicketResponse getTicketById(Long id) {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    String correoActual = auth.getName();
+
+    var ticketExistente = ticketRepository.findById(id)
+            .orElseThrow(() -> new TicketNotFoundException("Ticket no encontrado con ID: " + id));
+
+    var usuarioSolicitante = userRepository.findById(ticketExistente.getUsuarioId())
+            .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
+
+    var usuarioSoporte = userRepository.findById(ticketExistente.getTecnicoAsignadoId())
+            .orElseThrow(() -> new UserNotFoundException("Usuario asignado no encontrado"));
+
+    boolean esTecnico = auth.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_TECH"));
+
+    if (!esTecnico && !usuarioSolicitante.getCorreo().equals(correoActual)) {
+        throw new BadTicketRequestException("No tienes permiso para ver este ticket");
     }
+
+    return TicketMapper.toDTO(ticketExistente, usuarioSolicitante.getCorreo(), usuarioSoporte.getCorreo());
+}
+
 
     @Override
     public List<TicketResponseList> getAllTickets() {
